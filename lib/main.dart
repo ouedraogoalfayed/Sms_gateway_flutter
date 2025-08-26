@@ -6,32 +6,86 @@ import 'package:telephony/telephony.dart';
 import 'package:http/http.dart';
 
 final Telephony telephony = Telephony.instance;
-
-backgroundMessageHandler(SmsMessage message) async {
-  print("Background SMS: ${message.body}");
+void main() {
+  runApp(MyApp());
 }
 
-void main(){
-   telephony.listenIncomingSms(
-      onNewMessage: (SmsMessage message) async {
-        final response = await http.post(
-          Uri.parse("https:google.com"),
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: HomeWidget(),
+    );
+  }
+}
+
+class HomeWidget extends StatefulWidget{
+  const HomeWidget ({super.key});
+
+  @override
+
+  State<HomeWidget> createState() => _HomeWidgetState();
+}
+
+class _HomeWidgetState extends State<HomeWidget>{
+  
+  void function1() async{
+    
+      final response =  await http.post(
+          Uri.parse("http://192.168.1.66:8000/sms_received"),
           body:{
-            "from":message.address,
-            "text":message.body,
+            "from":"22670114741",
+            "text":"reussi ",
           },
         );
-        print("Reponse du serveur: ${response.body}");
-      },
+        print("Reponse du serveur: ${response.body}"); 
+    
+        
+  }
+  
+  @override
+  Widget build(BuildContext context){
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text("Test"),),
+        body: ElevatedButton(onPressed: () => function1(), child: Text("Press here")),
+      ),
+    );
+
+  }
+}
+    
+   /*telephony.listenIncomingSms(
+      onNewMessage: (SmsMessage message) async {*/
+
+     /* },
       listenInBackground: true,
       onBackgroundMessage: backgroundMessageHandler,
-    );
-}
+    );*/
+
 
 /*backgroundMessageHandler(SmsMessage message) async {
   print("Background SMS: ${message.body}");
 }
-
+/////////
+///final response =  await http.post(
+          Uri.parse("https://192.168.1.66:8000/sms_received"),
+          body:{
+            "from":"22670114741",
+            "text":"reussi bruh",
+          },
+        );
+        print("Reponse du serveur: ${response.body}"); }, 
+          child: Text("Press here")))
+    ));
+        
+///
+///
+///
+///
+///
 void main() {
   runApp(MyApp());
 }
