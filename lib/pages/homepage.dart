@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/new_form.dart';
 import 'new_endpoint.dart';
+import '../services/sms_listeneing.dart';
 
 
 class EndpointsScreen extends StatefulWidget {
@@ -19,7 +20,10 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
   void initState() {
     super.initState();
     _loadEndpoints();
+
   }
+
+
 
   // Charger les endpoints depuis SharedPreferences
   _loadEndpoints() async {
@@ -41,6 +45,8 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
         .toList();
     
     await prefs.setStringList('endpoints', endpointsJson);
+
+    await SmsService.refreshSmsListening();
   }
 
   // Naviguer vers le formulaire d'ajout/modification
@@ -65,7 +71,7 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
           }
         }
       });
-      _saveEndpoints();
+      await _saveEndpoints();
     }
   }
 
@@ -74,7 +80,7 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
     setState(() {
       endpoints.removeWhere((e) => e.id == id);
     });
-    _saveEndpoints();
+    await _saveEndpoints();
   }
 
   @override
@@ -227,11 +233,11 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
               // Switch pour activer/désactiver
               Switch(
                 value: endpoint.isEnabled,
-                onChanged: (value) {
+                onChanged: (value) async{
                   setState(() {
                     endpoint.isEnabled = value;
                   });
-                  _saveEndpoints();
+                  await _saveEndpoints();
                 },
                 activeColor: Color(0xFF26A69A),
               ),
@@ -274,12 +280,6 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
         return Colors.green;
       case 'POST':
         return Colors.blue;
-      case 'PUT':
-        return Colors.orange;
-      case 'DELETE':
-        return Colors.red;
-      case 'PATCH':
-        return Colors.purple;
       default:
         return Colors.grey;
     }
