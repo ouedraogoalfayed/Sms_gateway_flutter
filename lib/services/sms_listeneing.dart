@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'new_form.dart';
+import 'sms_history.dart';
 
 class SmsService {
   static final Telephony telephony = Telephony.instance;
@@ -92,18 +93,22 @@ class SmsService {
   }
 
   // Traiter le message SMS et l'envoyer aux endpoints actifs
-  static _processSmsMessage(SmsMessage message) async {
+  static Future<Map<dynamic, dynamic>> _processSmsMessage(SmsMessage message) async {
+    Map<String,dynamic> smsData = {};
+    List<Endpoint> activeEndpoints;
+    List<EndpointResult> endpointResults = [];
+    
     try {
       // Charger les endpoints actifs
-      final activeEndpoints = await _getActiveEndpoints();
+      activeEndpoints = await _getActiveEndpoints();
       
       if (activeEndpoints.isEmpty) {
         print("Aucun endpoint actif - SMS ignoré");
-        return;
+        return {};
       }
 
       // Préparer les données du SMS
-      final smsData = {
+      smsData = {
         'sender': message.address ?? 'Inconnu',
         'content': message.body ?? '',
         'timestamp': DateTime.now().toIso8601String(),
@@ -111,18 +116,39 @@ class SmsService {
 
       print("Envoi du SMS vers ${activeEndpoints.length} endpoint(s) actif(s)");
 
-      // Envoyer le SMS à chaque endpoint actif
+      // Envoyer le SMS à chaque endpoint actif et collecter les résultats
       for (final endpoint in activeEndpoints) {
-        await _sendSmsToEndpoint(endpoint, smsData);
+        final success = await _sendSmsToEndpoint(endpoint, smsData);
+        
+        endpointResults.add(EndpointResult(
+          endpointName: endpoint.name,
+          endpointUrl: endpoint.url,
+          status: success ? 'success' : 'error',
+          method: endpoint.method,
+        ));
       }
-      
+
+      // Sauvegarder dans l'historique
+      await _saveToHistory(
+        senderAddress: message.address ?? 'Inconnu',
+        date: smsData['timestamp'],
+        endpointResults: endpointResults,
+      );
+
     } catch (e) {
       print("Erreur lors du traitement du SMS: $e");
     }
+
+    return {
+      'senderaddr': smsData['sender'],
+      'smsdate': smsData['timestamp'],
+      'activeendp': await _getActiveEndpoints(),
+      'results': endpointResults,
+    };
   }
 
   // Envoyer les données SMS à un endpoint spécifique
-  static Future<void> _sendSmsToEndpoint(Endpoint endpoint, Map<String, dynamic> smsData) async {
+  static Future<bool> _sendSmsToEndpoint(Endpoint endpoint, Map<String, dynamic> smsData) async {
     try {
       print("Envoi vers ${endpoint.name} (${endpoint.method}) : ${endpoint.url}");
 
@@ -154,11 +180,92 @@ class SmsService {
 
         default:
           print("Méthode HTTP non supportée: ${endpoint.method}");
-          return;
+          return false;
+      }
+      
+      // Vérifier si la requête est bien parvenue
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Requête réussie
+        print('Succès: ${response.statusCode}');
+        return true;
+      } else {
+        // Erreur HTTP
+        print('Erreur HTTP: ${response.statusCode}');
+        print('Message: ${response.body}');
+        return false;
       }
 
     } catch (e) {
       print("❌ Erreur lors de l'envoi vers ${endpoint.name}: $e");
+      return false;
+    }
+  }
+
+  // Sauvegarder un élément dans l'historique
+  static Future<void> _saveToHistory({
+    required String senderAddress,
+    required String date,
+    required List<EndpointResult> endpointResults,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Générer un ID unique pour cet élément
+      final id = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // Créer l'élément d'historique
+      final historyItem = HistoryItem(
+        id: id,
+        senderAddress: senderAddress,
+        date: date,
+        endpoints: endpointResults,
+      );
+
+      // Charger l'historique existant
+      final existingHistory = await getHistory();
+      
+      // Ajouter le nouvel élément au début de la liste
+      existingHistory.insert(0, historyItem);
+      
+      // Limiter l'historique à 100 éléments maximum
+      if (existingHistory.length > 100) {
+        existingHistory.removeRange(100, existingHistory.length);
+      }
+      
+      // Sauvegarder l'historique mis à jour
+      final historyJson = existingHistory.map((item) => jsonEncode(item.toJson())).toList();
+      await prefs.setStringList('sms_history', historyJson);
+      
+      print("Historique sauvegardé: ${historyItem.senderAddress} -> ${endpointResults.length} endpoints");
+      
+    } catch (e) {
+      print("Erreur lors de la sauvegarde de l'historique: $e");
+    }
+  }
+
+  // Récupérer l'historique complet
+  static Future<List<HistoryItem>> getHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyJson = prefs.getStringList('sms_history') ?? [];
+      
+      return historyJson
+          .map((json) => HistoryItem.fromJson(jsonDecode(json)))
+          .toList();
+    } catch (e) {
+      print("Erreur lors du chargement de l'historique: $e");
+      return [];
+    }
+  }
+
+  // Effacer l'historique
+  static Future<void> clearHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('sms_history');
+      print("Historique effacé");
+    } catch (e) {
+      print("Erreur lors de l'effacement de l'historique: $e");
     }
   }
 
@@ -186,10 +293,13 @@ class SmsService {
   // Obtenir le statut du service
   static Future<Map<String, dynamic>> getServiceStatus() async {
     final activeEndpoints = await _getActiveEndpoints();
+    final historyCount = (await getHistory()).length;
+    
     return {
       'isListening': _isListening,
       'activeEndpointsCount': activeEndpoints.length,
       'hasPermissions': await telephony.requestPhoneAndSmsPermissions,
+      'historyCount': historyCount,
     };
   }
 }

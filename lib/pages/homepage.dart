@@ -5,7 +5,6 @@ import '../services/new_form.dart';
 import 'new_endpoint.dart';
 import '../services/sms_listeneing.dart';
 
-
 class EndpointsScreen extends StatefulWidget {
   const EndpointsScreen({super.key});
 
@@ -20,10 +19,7 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
   void initState() {
     super.initState();
     _loadEndpoints();
-
   }
-
-
 
   // Charger les endpoints depuis SharedPreferences
   _loadEndpoints() async {
@@ -95,10 +91,30 @@ class _EndpointsScreenState extends State<EndpointsScreen> {
               padding: EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'historique') {
+                        Navigator.pushNamed(context, '/history');
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem<String>(
+                        value: 'historique',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.history,
+                              color: Colors.grey[700],
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Text('Historique des opérations'),
+                          ],
+                        ),
+                      ),
+                    ],
                     icon: Icon(
-                      Icons.arrow_back_ios,
+                      Icons.menu,
                       color: Colors.white,
                       size: 24,
                     ),
